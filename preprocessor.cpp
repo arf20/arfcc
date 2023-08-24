@@ -23,16 +23,30 @@
 
 #include <string>
 #include <sstream>
+#include <algorithm>
 
 #include "preprocessor.hpp"
 
 std::string preprocess(std::stringstream& ss) {
     std::string line;
+    int linen = 0;
     while (std::getline(ss, line)) {
         auto start = line.find_first_not_of(" \t");
         if (line[start] == '#') {
             // Preprocessor directive
-            
+            auto dstart = find_if(line.begin() + start + 1, line.end(),
+                isalpha) - line.begin();
+
+            auto dend = std::find_if_not(line.begin() + dstart + 1, line.end(),
+                isalpha) - line.begin();
+
+            std::string directive = line.substr(dstart, dend - start - 1);
+
+            std::string args = line.substr(dend);
+
+            std::cout << "Line " << linen << ": Preprocessor directive: " << directive << args << std::endl;
         }
+
+        linen++;
     }
 }

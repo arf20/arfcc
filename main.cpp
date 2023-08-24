@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
         ("d,debug", "Debug output", cxxopts::value<bool>())
         ("files", "The file to compile", cxxopts::value<std::vector<std::string>>());
 
-    options.parse_positional({"file"});
+    options.parse_positional({"files"});
     auto result = options.parse(argc, argv);
 
     if (result.count("help")) {
@@ -49,9 +49,15 @@ int main(int argc, char **argv) {
 
     if (result.count("files")) {
         for (std::string file : result["files"].as<std::vector<std::string>>()) {
-            std::ifstream t(file);
+            std::ifstream fs(file);
+            if (!fs.is_open()) {
+                std::cout << "Error opening file: " << strerror(errno) << std::endl;
+            }
             std::stringstream ss;
-            ss << t.rdbuf();
+            ss << fs.rdbuf();
+            fs.close();
+            std::cout << "Compiling " << file << std::endl;
+            std::cout << "Preprocessing " << file << std::endl;
             preprocess(ss);
         }
     }
