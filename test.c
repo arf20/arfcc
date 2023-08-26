@@ -1,3 +1,6 @@
-#asdf value
-  #asdf      value
-#  sadf   value
+#define cname expression
+  #define      cname expression
+#  define   cname      expression
+     #  define   cname      expression
+#asdf
+#include <stdlib.h>

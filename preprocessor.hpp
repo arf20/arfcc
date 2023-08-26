@@ -27,4 +27,9 @@
 
 #include "preprocessor.hpp"
 
+struct line_t {
+    int linen;
+    std::string str;
+};
+
 std::string preprocess(std::stringstream& ss);
