@@ -16,14 +16,12 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    main.c: Program entry point
+    main.cpp: Program entry point
 
 */
 
 
 #include <iostream>
-#include <fstream>
-#include <sstream>
 #include <string>
 
 #include <cxxopts.hpp>
@@ -49,16 +47,8 @@ int main(int argc, char **argv) {
 
     if (result.count("files")) {
         for (std::string file : result["files"].as<std::vector<std::string>>()) {
-            std::ifstream fs(file);
-            if (!fs.is_open()) {
-                std::cout << "Error opening file: " << strerror(errno) << std::endl;
-            }
-            std::stringstream ss;
-            ss << fs.rdbuf();
-            fs.close();
-            std::cout << "Compiling " << file << std::endl;
-            std::cout << "Preprocessing " << file << std::endl;
-            preprocess(ss);
+            
+            preprocess(file);
         }
     }
 }

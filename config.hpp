@@ -1,3 +1,3 @@
 #pragma once
 
-#define INCLUDE_PATH "/usr/include/"
+#define INCLUDE_PATHS "/usr/include/", "/usr/include/x86_64-linux-gnu/"

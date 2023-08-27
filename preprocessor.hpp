@@ -16,8 +16,6 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    main.c: Program entry point
-
 */
 
 
@@ -28,8 +26,9 @@
 #include "preprocessor.hpp"
 
 struct line_t {
+    std::string file;
     int linen;
     std::string str;
 };
 
-std::string preprocess(std::stringstream& ss);
+std::vector<line_t> preprocess(const std::string& filename);

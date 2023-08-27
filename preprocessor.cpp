@@ -16,7 +16,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    main.c: Program entry point
+    preprocessor.cpp: Program entry point
 
 */
 
@@ -27,41 +27,63 @@
 #include <vector>
 #include <tuple>
 #include <filesystem>
+#include <fstream>
+#include <errno.h>
+#include <string.h>
 
 #include "config.hpp"
+#include "logging.hpp"
 
 #include "preprocessor.hpp"
 
 std::string stripbegend(std::string str) {
+    if (str == "") return "";
     auto beg = str.find_first_not_of(" \t");
     auto end = str.find(" \t", beg);
     return str.substr(beg, end - beg);
 }
 
-std::string preprocess(std::stringstream& ss) {
+std::vector<line_t> preprocess(const std::string& filename) {
     std::vector<line_t> preprocessed;
-
     std::vector<std::tuple<std::string, std::string>> defines;
 
+    // open and read file
+    std::ifstream fs(filename);
+    if (!fs.is_open()) {
+        std::cout << TERM_RED "Error opening " << filename << ": " TERM_RESET << strerror(errno) << std::endl;
+        return std::vector<line_t>(); // return empty
+    }
+    std::stringstream ss;
+    ss << fs.rdbuf();
+    fs.close();
+    std::cout << "Preprocessing " << filename << std::endl;
+
+    // read line by line
     std::string line;
     int linen = 0;
     while (std::getline(ss, line)) {
         auto start = line.find_first_not_of(" \t");
-        
-        std::stringstream liness(line);
-        std::string firststat;
-        liness >> firststat;
 
-        if (firststat[0] == '#') {
-            if (firststat == "#") {
-                liness >> firststat;
-                firststat.insert(firststat.begin(), '#');
+        // strip line comments
+        size_t linecommpos = 0;
+        if ((linecommpos = line.find("//")) != std::string::npos) {
+            line = line.substr(0, linecommpos);
+        }
+        
+        // get first token
+        std::stringstream liness(line);
+        std::string firsttok;
+        liness >> firsttok;
+
+        if (firsttok[0] == '#') {
+            if (firsttok == "#") {
+                liness >> firsttok;
+                firsttok.insert(firsttok.begin(), '#');
             }
             // Preprocessor directive
-            std::cout << "Line " << linen << ": Preprocessor directive: "
-                << firststat << std::endl;
+            //LOG_DEBUG << "Preprocessor directive: " << firststat << std::endl;
 
-            if (firststat == "#define") {
+            if (firsttok == "#define") {
                 // #define CNAME expression
                 //        ^ space required
                 std::string cname, expression;
@@ -71,8 +93,8 @@ std::string preprocess(std::stringstream& ss) {
 
                 defines.push_back(std::tuple<std::string, std::string>(cname, expression));
 
-                std::cout << "Defined " << cname << " as " << expression << std::endl;
-            } else if (firststat.substr(0, 8) == "#include") {
+                LOG_DEBUG << "defined " << cname << " as " << expression << std::endl;
+            } else if (firsttok.substr(0, 8) == "#include") {
                 // #include <stuff>
                 // space not required
                 bool relative = true;
@@ -83,40 +105,56 @@ std::string preprocess(std::stringstream& ss) {
                     relative = false;
                 }
                 if (argbeg == std::string::npos) {
-                    std::cout << "Line " << linen << ": Error: invalid include type" << std::endl;
+                    LOG_ERROR << "invalid include type" << std::endl;
                     continue;
                 }
 
                 size_t argend = 0;
                 if (relative) {
                     if ((argend = line.find("\"", argbeg + 1)) == std::string::npos) {
-                        std::cout << "Line " << linen << ": Error: missing closing character" << std::endl;
+                        LOG_ERROR << "missing closing character" << std::endl;
                         continue;
                     }
                 }
                 else {
                     if ((argend = line.find(">", argbeg + 1)) == std::string::npos) {
-                        std::cout << "Line " << linen << ": Error: missing closing character" << std::endl;
+                        LOG_ERROR << "missing closing character" << std::endl;
                         continue;
                     }
                 }
 
                 std::string arg = line.substr(argbeg + 1, argend - argbeg - 1);
 
-                
-                if (!relative) arg = INCLUDE_PATH + arg;
+                auto relative_pwd = std::filesystem::path(filename).remove_filename().string();
+
+                std::vector<std::string> include_paths = {INCLUDE_PATHS};
+                if (relative) arg = relative_pwd + arg;
+                else {
+                    for (auto& p : include_paths) {
+                        if (std::filesystem::exists(p + arg)) {
+                            arg = p + arg;
+                            break;
+                        }
+                    }
+                }
 
                 std::filesystem::path path(arg);
 
-                std::cout << "Included " << path.string() << std::endl;
+                auto include_preprocessed = preprocess(path.string());
+                preprocessed.insert(preprocessed.end(), include_preprocessed.begin(), include_preprocessed.end());
+
+                LOG_DEBUG << "included " << path.string() << std::endl;
 
             } else {
-                std::cout << "Line " << linen << ": Error: unrecognised preprocessor directive " << firststat << std::endl;
+                LOG_ERROR << "unrecognised preprocessor directive " << firsttok << std::endl;
+                continue;
             }
         } else {
-            preprocessed.push_back(line_t{linen, line});
+            preprocessed.push_back(line_t{filename, linen, line});
         }
 
         linen++;
     }
+
+    return preprocessed;
 }
