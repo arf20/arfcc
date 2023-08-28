@@ -72,20 +72,18 @@ std::vector<line_t> preprocess(std::string filename) {
     // read line by line
     while (unprocessed.size()) {
         line_t line = unprocessed[0];
-        linestr = line.str;
-        linen = line.linen;
         filename = line.file;
 
-        auto start = linestr.find_first_not_of(" \t");
+        auto start = line.str.find_first_not_of(" \t");
 
         // strip line comments
         size_t linecommpos = 0;
-        if ((linecommpos = linestr.find("//")) != std::string::npos) {
-            linestr = linestr.substr(0, linecommpos);
+        if ((linecommpos = line.str.find("//")) != std::string::npos) {
+            line.str = line.str.substr(0, linecommpos);
         }
         
         // get first token
-        std::stringstream liness(linestr);
+        std::stringstream liness(line.str);
         std::string firsttok;
         liness >> firsttok;
 
@@ -112,10 +110,10 @@ std::vector<line_t> preprocess(std::string filename) {
                 // #include <stuff>
                 // space not required
                 bool relative = true;
-                auto dirbeg = linestr.find('#');
-                auto argbeg = linestr.find("\"", dirbeg);
+                auto dirbeg = line.str.find('#');
+                auto argbeg = line.str.find("\"", dirbeg);
                 if (argbeg == std::string::npos) {
-                    argbeg = linestr.find("<", dirbeg);
+                    argbeg = line.str.find("<", dirbeg);
                     relative = false;
                 }
                 if (argbeg == std::string::npos) {
@@ -125,21 +123,21 @@ std::vector<line_t> preprocess(std::string filename) {
 
                 size_t argend = 0;
                 if (relative) {
-                    if ((argend = linestr.find("\"", argbeg + 1)) == std::string::npos) {
+                    if ((argend = line.str.find("\"", argbeg + 1)) == std::string::npos) {
                         LOG_ERROR << "missing closing character" << std::endl;
                         goto next;
                     }
                 }
                 else {
-                    if ((argend = linestr.find(">", argbeg + 1)) == std::string::npos) {
+                    if ((argend = line.str.find(">", argbeg + 1)) == std::string::npos) {
                         LOG_ERROR << "missing closing character" << std::endl;
                         goto next;
                     }
                 }
 
-                std::string arg = linestr.substr(argbeg + 1, argend - argbeg - 1);
+                std::string arg = line.str.substr(argbeg + 1, argend - argbeg - 1);
 
-                auto relative_pwd = std::filesystem::path(filename).remove_filename().string();
+                auto relative_pwd = std::filesystem::path(line.file).remove_filename().string();
 
                 std::vector<std::string> include_paths = {INCLUDE_PATHS};
                 if (relative) arg = relative_pwd + arg;
@@ -169,8 +167,8 @@ std::vector<line_t> preprocess(std::string filename) {
                 std::vector<line_t> included;
 
                 size_t i = 0;
-                while (std::getline(inss, linestr)) {
-                    included.push_back(line_t{arg, i, linestr});
+                while (std::getline(inss, line.str)) {
+                    included.push_back(line_t{arg, i, line.str});
                     i++;
                 }
 
@@ -193,6 +191,17 @@ std::vector<line_t> preprocess(std::string filename) {
     next:
         unprocessed.pop_front();
     }
+
+    auto preprocessed_fname = std::filesystem::path(filename).stem().string() + ".i";
+    std::ofstream preprocessed_file(preprocessed_fname);
+    if (!preprocessed_file.is_open()) {
+        LOG_ERROR << "opening " << preprocessed_fname << ": " TERM_RESET << strerror(errno) << std::endl;
+    }
+
+    for (auto l : preprocessed)
+        preprocessed_file << l.str << std::endl;
+
+    preprocessed_file.close();
 
     return preprocessed;
 }

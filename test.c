@@ -1,7 +1,6 @@
 #define cname expression
-  #define      cname expression   // asdffdsfdsf
-#  define   cname      expression
-     #  define   cname      expression
-#asdf
+
+cname
+      
 //#include "test.h" // asdf
-#include <stdint.h>
+//#include <stdint.h>
