@@ -27,8 +27,8 @@
 
 struct line_t {
     std::string file;
-    int linen;
+    size_t linen;
     std::string str;
 };
 
-std::vector<line_t> preprocess(const std::string& filename);
+std::vector<line_t> preprocess(std::string filename);

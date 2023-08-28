@@ -25,6 +25,7 @@
 #include <sstream>
 #include <algorithm>
 #include <vector>
+#include <deque>
 #include <tuple>
 #include <filesystem>
 #include <fstream>
@@ -43,9 +44,11 @@ std::string stripbegend(std::string str) {
     return str.substr(beg, end - beg);
 }
 
-std::vector<line_t> preprocess(const std::string& filename) {
+std::vector<line_t> preprocess(std::string filename) {
     std::vector<line_t> preprocessed;
     std::vector<std::tuple<std::string, std::string>> defines;
+
+    std::deque<line_t> unprocessed;
 
     // open and read file
     std::ifstream fs(filename);
@@ -56,22 +59,33 @@ std::vector<line_t> preprocess(const std::string& filename) {
     std::stringstream ss;
     ss << fs.rdbuf();
     fs.close();
+
+    std::string linestr;
+    size_t linen = 0;
+    while (std::getline(ss, linestr)) {
+        unprocessed.push_back(line_t{filename, linen, linestr});
+        linen++;
+    }
+
     std::cout << "Preprocessing " << filename << std::endl;
 
     // read line by line
-    std::string line;
-    int linen = 0;
-    while (std::getline(ss, line)) {
-        auto start = line.find_first_not_of(" \t");
+    while (unprocessed.size()) {
+        line_t line = unprocessed[0];
+        linestr = line.str;
+        linen = line.linen;
+        filename = line.file;
+
+        auto start = linestr.find_first_not_of(" \t");
 
         // strip line comments
         size_t linecommpos = 0;
-        if ((linecommpos = line.find("//")) != std::string::npos) {
-            line = line.substr(0, linecommpos);
+        if ((linecommpos = linestr.find("//")) != std::string::npos) {
+            linestr = linestr.substr(0, linecommpos);
         }
         
         // get first token
-        std::stringstream liness(line);
+        std::stringstream liness(linestr);
         std::string firsttok;
         liness >> firsttok;
 
@@ -98,32 +112,32 @@ std::vector<line_t> preprocess(const std::string& filename) {
                 // #include <stuff>
                 // space not required
                 bool relative = true;
-                auto dirbeg = line.find('#');
-                auto argbeg = line.find("\"", dirbeg);
+                auto dirbeg = linestr.find('#');
+                auto argbeg = linestr.find("\"", dirbeg);
                 if (argbeg == std::string::npos) {
-                    argbeg = line.find("<", dirbeg);
+                    argbeg = linestr.find("<", dirbeg);
                     relative = false;
                 }
                 if (argbeg == std::string::npos) {
                     LOG_ERROR << "invalid include type" << std::endl;
-                    continue;
+                    goto next;
                 }
 
                 size_t argend = 0;
                 if (relative) {
-                    if ((argend = line.find("\"", argbeg + 1)) == std::string::npos) {
+                    if ((argend = linestr.find("\"", argbeg + 1)) == std::string::npos) {
                         LOG_ERROR << "missing closing character" << std::endl;
-                        continue;
+                        goto next;
                     }
                 }
                 else {
-                    if ((argend = line.find(">", argbeg + 1)) == std::string::npos) {
+                    if ((argend = linestr.find(">", argbeg + 1)) == std::string::npos) {
                         LOG_ERROR << "missing closing character" << std::endl;
-                        continue;
+                        goto next;
                     }
                 }
 
-                std::string arg = line.substr(argbeg + 1, argend - argbeg - 1);
+                std::string arg = linestr.substr(argbeg + 1, argend - argbeg - 1);
 
                 auto relative_pwd = std::filesystem::path(filename).remove_filename().string();
 
@@ -138,22 +152,46 @@ std::vector<line_t> preprocess(const std::string& filename) {
                     }
                 }
 
-                std::filesystem::path path(arg);
+                std::filesystem::path inpath(arg);
 
-                auto include_preprocessed = preprocess(path.string());
-                preprocessed.insert(preprocessed.end(), include_preprocessed.begin(), include_preprocessed.end());
+                //auto include_preprocessed = preprocess(path.string());
+                //preprocessed.insert(preprocessed.end(), include_preprocessed.begin(), include_preprocessed.end());
+                // read include
+                std::ifstream infs(inpath);
+                if (!infs.is_open()) {
+                    LOG_ERROR << "opening " << arg << ": " TERM_RESET << strerror(errno) << std::endl;
+                    goto next;
+                }
+                std::stringstream inss;
+                inss << infs.rdbuf();
+                infs.close();
 
-                LOG_DEBUG << "included " << path.string() << std::endl;
+                std::vector<line_t> included;
+
+                size_t i = 0;
+                while (std::getline(inss, linestr)) {
+                    included.push_back(line_t{arg, i, linestr});
+                    i++;
+                }
+
+                unprocessed.insert(unprocessed.begin(), included.begin(), included.end());
+
+                //std::streamsize orgpos = ss.tellp();
+                //ss.str(inss.str() + ss.str());
+                //ss.seekp(pos + s.length());
+
+                LOG_DEBUG << "included " << inpath.string() << std::endl;
 
             } else {
                 LOG_ERROR << "unrecognised preprocessor directive " << firsttok << std::endl;
-                continue;
+                goto next;
             }
         } else {
-            preprocessed.push_back(line_t{filename, linen, line});
+            preprocessed.push_back(line);
         }
 
-        linen++;
+    next:
+        unprocessed.pop_front();
     }
 
     return preprocessed;
